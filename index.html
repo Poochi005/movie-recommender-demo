@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TMDB Movie Recommendation System</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="logo">TMDB <span>Movie</span></div>
+        <div class="nav-links">
+            <a href="#" id="navHome">Home</a>
+            <a href="#movies" id="navMovies">Movies</a>
+            <a href="#movies" id="navPopular">Popular</a>
+        </div>
+    </nav>
+
+    <section class="hero">
+        <div class="hero-content">
+            <p class="small-title">WELCOME TO</p>
+            <h1>TMDB Movie<br>Recommendation System</h1>
+            <p>Explore thousands of movies and discover your next favourite film.</p>
+            <a href="#movies" class="explore-btn">Explore Movies</a>
+        </div>
+    </section>
+
+    <section class="movie-section" id="movies">
+        <div class="section-header">
+            <h2>🎬 Movies</h2>
+            <span id="count">Loading...</span>
+        </div>
+
+        <div class="search-container">
+            <form id="searchForm">
+                <input type="text" id="searchBox" name="title" placeholder="Search movies...">
+                <button type="submit">🔍 Search</button>
+            </form>
+        </div>
+
+        <div class="movie-grid" id="grid"></div>
+        <div class="no-results" id="empty" style="display:none">No matching movies found.</div>
+        <div class="load-more-wrap"><button id="more" style="display:none">Load more</button></div>
+    </section>
+
+    <footer>
+        <p>TMDB Movie Recommendation System</p>
+        <p class="footer-small">Demo of the Java Spring Boot + MySQL + Thymeleaf project &middot; data from TMDB</p>
+    </footer>
+
+    <div class="modal-backdrop" id="modalBg">
+        <div class="modal" role="dialog" aria-modal="true">
+            <button class="close" id="modalClose" aria-label="Close">&times;</button>
+            <img id="mImg" alt="">
+            <div>
+                <h3 id="mTitle"></h3>
+                <div class="meta" id="mMeta"></div>
+                <div class="genre" id="mGenres"></div>
+                <p class="overview" id="mOverview" style="-webkit-line-clamp:unset;display:block;overflow:visible"></p>
+                <p class="meta" id="mDirector"></p>
+            </div>
+        </div>
+    </div>
+
+<script>
+(function () {
+    var PAGE = 24;
+    var all = [], shown = [], limit = PAGE, sortPopular = false;
+    var grid = document.getElementById('grid');
+    var el = function (id) { return document.getElementById(id); };
+
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+
+    function card(m, idx) {
+        var poster = m.poster
+            ? '<div class="poster-wrapper"><img class="movie-poster" loading="lazy" src="' + esc(m.poster) + '" alt="' + esc(m.title) + ' poster"></div>'
+            : '<div class="poster-placeholder"><div class="placeholder-icon">🎬</div><div class="placeholder-text">NO POSTER</div><div class="placeholder-title">' + esc(m.title) + '</div></div>';
+        var genres = m.genres.map(function (g) { return '<span>' + esc(g) + '</span>'; }).join('');
+        return '<div class="movie-card" data-i="' + idx + '">' +
+            '<div class="poster-container">' + poster + '</div>' +
+            '<div class="movie-number">' + esc(m.id) + '</div>' +
+            '<div class="movie-content"><h3>' + esc(m.title) + '</h3>' +
+            '<div class="movie-info"><span>⭐ <strong>' + esc(m.rating) + '</strong></span>' +
+            '<span>👥 <strong>' + esc(m.votes) + '</strong></span><span>' + esc(m.date) + '</span></div>' +
+            '<p class="overview">' + esc(m.overview) + '</p>' +
+            '<div class="genre">' + genres + '</div></div></div>';
+    }
+
+    function render() {
+        var slice = shown.slice(0, limit);
+        grid.innerHTML = slice.map(function (m, i) { return card(m, i); }).join('');
+        el('count').textContent = shown.length + ' Movies';
+        el('empty').style.display = shown.length ? 'none' : 'block';
+        el('more').style.display = shown.length > limit ? 'inline-block' : 'none';
+    }
+
+    function apply() {
+        var q = el('searchBox').value.trim().toLowerCase();
+        shown = all.filter(function (m) { return !q || m.title.toLowerCase().indexOf(q) !== -1; });
+        if (sortPopular) shown = shown.slice().sort(function (a, b) { return (b.popularity || 0) - (a.popularity || 0); });
+        limit = PAGE;
+        render();
+    }
+
+    function openModal(m) {
+        el('mImg').src = m.poster || '';
+        el('mImg').style.display = m.poster ? 'block' : 'none';
+        el('mTitle').textContent = m.title;
+        el('mMeta').textContent = '⭐ ' + m.rating + '  ·  ' + m.date + (m.runtime ? '  ·  ' + m.runtime + ' min' : '');
+        el('mGenres').innerHTML = m.genres.map(function (g) { return '<span>' + esc(g) + '</span>'; }).join('');
+        el('mOverview').textContent = m.overview;
+        el('mDirector').textContent = m.director ? 'Director: ' + m.director : '';
+        el('modalBg').classList.add('open');
+    }
+    function closeModal() { el('modalBg').classList.remove('open'); }
+
+    el('searchForm').addEventListener('submit', function (e) { e.preventDefault(); apply(); });
+    el('searchBox').addEventListener('input', apply);
+    el('more').addEventListener('click', function () { limit += PAGE; render(); });
+    grid.addEventListener('click', function (e) {
+        var c = e.target.closest('.movie-card');
+        if (c) openModal(shown[+c.getAttribute('data-i')]);
+    });
+    // if a TMDB poster fails to load, show the same "NO POSTER" placeholder
+    grid.addEventListener('error', function (e) {
+        var img = e.target;
+        if (img.tagName !== 'IMG' || !img.classList.contains('movie-poster')) return;
+        var title = img.getAttribute('alt').replace(/ poster$/, '');
+        var box = img.closest('.poster-container');
+        box.innerHTML = '<div class="poster-placeholder"><div class="placeholder-icon">🎬</div><div class="placeholder-text">NO POSTER</div><div class="placeholder-title">' + esc(title) + '</div></div>';
+    }, true);
+    el('modalClose').addEventListener('click', closeModal);
+    el('modalBg').addEventListener('click', function (e) { if (e.target === el('modalBg')) closeModal(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
+    el('navHome').addEventListener('click', function (e) { e.preventDefault(); sortPopular = false; window.scrollTo(0, 0); apply(); });
+    el('navMovies').addEventListener('click', function () { sortPopular = false; apply(); });
+    el('navPopular').addEventListener('click', function () { sortPopular = true; apply(); });
+
+    // movies.json is a relative path, so it works under /<repo-name>/ on GitHub Pages
+    fetch('movies.json')
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function (data) {
+            all = data;
+            var t = new URLSearchParams(location.search).get('title');
+            if (t) el('searchBox').value = t;
+            apply();
+        })
+        .catch(function () { el('count').textContent = 'Could not load movies.json'; });
+})();
+</script>
+</body>
+</html>
